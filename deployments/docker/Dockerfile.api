@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY apps /app/apps
 COPY configs /app/configs
-COPY configs/.env /app/configs/app.env
+# COPY configs/.env /app/configs/app.env
 COPY configs/logging.yaml /app/configs/logging.yaml
 
 EXPOSE 8000
