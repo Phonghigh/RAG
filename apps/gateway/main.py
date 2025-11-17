@@ -12,13 +12,13 @@ app = FastAPI(
     openapi_url="/openapi.json" if settings.app_env == "development" else None
 )
 
-# #health check endpoint
-# @app.get("/health")
-# async def health_check():
-#     return {
-#         "status": "ok",
-#         "environment": settings.app_env
-#     }
+#health check endpoint
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "ok",
+        "environment": settings.app_env
+    }
 
 #root endpoint
 @app.get("/")
