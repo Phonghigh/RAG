@@ -1,43 +1,47 @@
-# Version 1 of the logging configuration
 version: 1
+disable_existing_loggers: false
 
-# Formatters are used to define the format of the logs
 formatters:
-  # Standard formatter is used to format the logs in a standard format
-  standard:
-    # The format of the logs is defined here
-    format: "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+  default:
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+  json:
+    format: "%(asctime)s %(name)s %(levelname)s %(message)s"
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
 
-# Handlers are used to define the output of the logs
 handlers:
-  # Console handler is used to output the logs to the console
   console:
-    # The class of the handler is defined here
     class: logging.StreamHandler
-    # The formatter of the handler is defined here
-    formatter: standard
+    level: INFO
+    formatter: default
+    stream: ext://sys.stdout
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: json
+    filename: logs/app.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf8
 
-# Loggers are used to define the output of the logs
 loggers:
-  # Uvicorn error logger is used to output the logs to the console
-  uvicorn.error:
-    # The level of the logger is defined here
-    level: INFO
-    # The handlers of the logger are defined here
-    handlers: [console]
-    # The propagate of the logger is defined here
-    propagate: false
-  # App logger is used to output the logs to the console
   app:
-    # The level of the logger is defined here
     level: INFO
-    # The handlers of the logger are defined here
-    handlers: [console]
-    # The propagate of the logger is defined here
+    handlers: [console, file]
     propagate: false
-  # Root logger is used to output the logs to the console
-root:
-    # The level of the logger is defined here
+  app.gateway:
     level: INFO
-    # The handlers of the logger are defined here
-    handlers: [console]
+    handlers: [console, file]
+    propagate: false
+  app.ingestion:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  app.notifier:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+
+root:
+  level: WARNING
+  handlers: [console]

@@ -1,22 +1,86 @@
-[tool.poetry]
+[project]
 name = "rca-rag"
 version = "0.1.0"
-description = "RCA-RAG bootstrap (FastAPI + Google Chat webhook)"
-authors = ["you <you@example.com>"]
+description = "RCA-RAG Code Intelligence - SaaS nội bộ, air-gapped, phân tích diff/PR"
+authors = [{name = "RCA-RAG Team"}]
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.8.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "alembic>=1.13.0",
+    "psycopg[binary]>=3.2.0",
+    "pgvector>=0.3.0",
+    "boto3>=1.34.0",
+    "minio>=7.2.0",
+    "tenacity>=8.2.0",
+    "httpx>=0.27.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "loguru>=0.7.0",
+    "opentelemetry-sdk>=1.24.0",
+    "prometheus-client>=0.20.0",
+    "tree-sitter>=0.21.0",
+    "javalang>=0.13.0",
+    "lxml>=5.1.0",
+    "beautifulsoup4>=4.12.0",
+    "scikit-learn>=1.4.0",
+    "xgboost>=2.1.0",
+    "orjson>=3.10.0",
+    "python-dotenv>=1.0.1",
+    "pyyaml>=6.0.2",
+    "kafka-python>=2.0.2",
+    "redis>=5.0.0",
+    "pika>=1.3.0",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<3.13"
-fastapi = "^0.115.0"
-uvicorn = {extras = ["standard"], version = "^0.29.0"}
-httpx = "^0.27.0"
-python-dotenv = "^1.0.1"
-pydantic = "^2.8.0"
-pyyaml = "^6.0.2"
-
-[tool.poetry.group.dev.dependencies]
-ruff = "^0.6.5"
-mypy = "^1.11.0"
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.6.5",
+    "mypy>=1.11.0",
+    "black>=24.0.0",
+]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]  # Line length handled by formatter
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["apps"]
+omit = ["*/tests/*", "*/migrations/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

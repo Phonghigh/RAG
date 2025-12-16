@@ -1,20 +1,108 @@
+"""Application configuration using Pydantic Settings."""
 import os
-from dataclasses import dataclass
-from dotenv import load_dotenv
+from typing import Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
-# Load environment variables from configs/app.env
-load_dotenv("configs/.env")
 
-@dataclass
-class Settings:
-    app_name: str = os.getenv("APP_NAME", "RCA-RAG")
-    app_env: str = os.getenv("APP_ENV", "development")
-    app_host: str = os.getenv("APP_HOST", "0.0.0.0")
-    app_port: int = os.getenv("APP_PORT", 8000)
+class Settings(BaseSettings):
+    """Application settings."""
+    
+    model_config = SettingsConfigDict(
+        env_file="configs/.env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+    
+    # App settings
+    app_name: str = Field(default="RCA-RAG", description="Application name")
+    app_env: str = Field(default="development", description="Environment")
+    app_host: str = Field(default="0.0.0.0", description="Host to bind")
+    app_port: int = Field(default=8080, description="Port to bind")
+    
+    # Database
+    database_url: str = Field(
+        default="postgresql+psycopg://postgres:postgres@localhost:5432/rca_rag",
+        description="Database connection URL"
+    )
+    database_echo: bool = Field(default=False, description="Echo SQL queries")
+    
+    # Message Queue
+    mq_type: str = Field(default="redis", description="MQ type: redis, kafka, rabbitmq")
+    redis_url: str = Field(default="redis://localhost:6379/0", description="Redis URL")
+    kafka_bootstrap_servers: str = Field(
+        default="localhost:9094",
+        description="Kafka bootstrap servers"
+    )
+    kafka_topic_prefix: str = Field(default="rca-rag", description="Kafka topic prefix")
+    rabbitmq_url: str = Field(
+        default="amqp://admin:admin@localhost:5672/",
+        description="RabbitMQ URL"
+    )
+    
+    # Storage (S3/MinIO)
+    storage_type: str = Field(default="minio", description="Storage type: s3, minio")
+    s3_endpoint_url: Optional[str] = Field(default=None, description="S3 endpoint URL")
+    s3_access_key: str = Field(default="minioadmin", description="S3 access key")
+    s3_secret_key: str = Field(default="minioadmin", description="S3 secret key")
+    s3_bucket_name: str = Field(default="rca-rag", description="S3 bucket name")
+    s3_region: str = Field(default="us-east-1", description="S3 region")
+    s3_use_ssl: bool = Field(default=False, description="Use SSL for S3")
+    
+    # Google Chat
+    google_chat_webhook_url: Optional[str] = Field(
+        default=None,
+        description="Google Chat webhook URL"
+    )
+    google_chat_thread_key: Optional[str] = Field(
+        default=None,
+        description="Google Chat thread key"
+    )
+    google_chat_notified_users: str = Field(
+        default="",
+        description="Comma-separated list of users to notify"
+    )
+    
+    # GitHub
+    github_webhook_secret: str = Field(
+        default="",
+        description="GitHub webhook secret for signature verification"
+    )
+    github_trusted_ua_prefix: str = Field(
+        default="GitHub-Hookshot/",
+        description="Trusted User-Agent prefix"
+    )
+    github_app_id: Optional[str] = Field(default=None, description="GitHub App ID")
+    github_app_private_key: Optional[str] = Field(
+        default=None,
+        description="GitHub App private key (PEM)"
+    )
+    
+    # Retention
+    retention_days: int = Field(default=90, description="Days to retain raw diffs")
+    
+    # Observability
+    log_level: str = Field(default="INFO", description="Logging level")
+    metrics_enabled: bool = Field(default=True, description="Enable Prometheus metrics")
+    
+    # Security
+    jwt_secret_key: str = Field(
+        default="change-me-in-production",
+        description="JWT secret key"
+    )
+    jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
+    jwt_access_token_expire_minutes: int = Field(
+        default=30,
+        description="JWT access token expiration in minutes"
+    )
+    
+    # Air-gapped
+    allow_external_requests: bool = Field(
+        default=False,
+        description="Allow external HTTP requests (for air-gapped environments)"
+    )
 
-    #gooogle chat
-    google_chat_webhook_url: str = os.getenv("GOOGLE_CHAT_WEBHOOK_URL")
-    google_chat_thread_key: str = os.getenv("GOOGLE_CHAT_THREAD_KEY")
-    google_chat_notified_users: str = os.getenv("GOOGLE_CHAT_NOTIFIED_USERS", "")
 
+# Global settings instance
 settings = Settings()

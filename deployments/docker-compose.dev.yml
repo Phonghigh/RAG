@@ -1,0 +1,134 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile.api
+    env_file:
+      - ../configs/app.example.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      mq:
+        condition: service_started
+      s3:
+        condition: service_started
+    networks:
+      - rca-rag-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile.worker
+    env_file:
+      - ../configs/app.example.env
+    depends_on:
+      db:
+        condition: service_healthy
+      mq:
+        condition: service_started
+      s3:
+        condition: service_started
+    networks:
+      - rca-rag-network
+    restart: unless-stopped
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rca_rag
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../infra/sql:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - rca-rag-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mq:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - rca-rag-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Alternative: Uncomment for Kafka
+  # kafka:
+  #   image: bitnami/kafka:latest
+  #   environment:
+  #     KAFKA_CFG_NODE_ID: 1
+  #     KAFKA_CFG_PROCESS_ROLES: broker,controller
+  #     KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+  #     KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+  #     KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+  #     KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+  #     KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  #     KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+  #   ports:
+  #     - "9094:9094"
+  #   networks:
+  #     - rca-rag-network
+
+  # Alternative: Uncomment for RabbitMQ
+  # rabbitmq:
+  #   image: rabbitmq:3-management-alpine
+  #   environment:
+  #     RABBITMQ_DEFAULT_USER: admin
+  #     RABBITMQ_DEFAULT_PASS: admin
+  #   ports:
+  #     - "5672:5672"
+  #     - "15672:15672"
+  #   networks:
+  #     - rca-rag-network
+
+  s3:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - s3data:/data
+    networks:
+      - rca-rag-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+volumes:
+  pgdata:
+  redisdata:
+  s3data:
+
+networks:
+  rca-rag-network:
+    driver: bridge
+

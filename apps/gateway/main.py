@@ -1,60 +1,58 @@
-import json
+"""FastAPI gateway application."""
 import logging
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger as loguru_logger
 from apps.shared.config import settings
-from apps.notifer.client import GooogleChatNotifier
+from apps.gateway.webhook.github import router as github_webhook_router
+from apps.gateway.api.health import router as health_router
+from apps.gateway.api.metrics import router as metrics_router
+from apps.gateway.api.admin import router as admin_router
 
-logger = logging.getLogger("app")
+# Configure logging
+logging.basicConfig(level=getattr(logging, settings.log_level.upper()))
+
+# Create FastAPI app
 app = FastAPI(
-    title=settings.app_name, 
+    title=settings.app_name,
+    version="0.1.0",
     docs_url="/docs" if settings.app_env == "development" else None,
     redoc_url="/redoc" if settings.app_env == "development" else None,
-    openapi_url="/openapi.json" if settings.app_env == "development" else None
+    openapi_url="/openapi.json" if settings.app_env == "development" else None,
 )
 
-#health check endpoint
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "ok",
-        "environment": settings.app_env
-    }
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if settings.app_env == "development" else [],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-#root endpoint
+# Include routers
+app.include_router(health_router)
+app.include_router(metrics_router)
+app.include_router(github_webhook_router)
+app.include_router(admin_router)
+
+
 @app.get("/")
-def root():
+async def root():
+    """Root endpoint."""
     return {
         "status": "ok",
-        "environment": settings.app_env
+        "service": settings.app_name,
+        "environment": settings.app_env,
     }
 
-#ping google chat endpoint
-@app.post("/ping/google-chat")
-def ping_google_chat():
-    logger.info(f"Pinging Google Chat: {settings.google_chat_webhook_url}")
-    #send message to google chat
-    notifier = GooogleChatNotifier(
-        webhook_url=settings.google_chat_webhook_url,
-        thread_key=settings.google_chat_thread_key,
-        notified_users=settings.google_chat_notified_users,
-    )
 
-    #build message
-    message = f"Hello, world! This is a test message from the RCA-RAG API."
-    logger.info(f"Sending message to Google Chat: {message}")
-    try:
-
-        response = notifier.send_message(text=message)
-        logger.info(f"Response from Google Chat: {response}")
-        return {
-            "status": "ok",
-            "message": response
-        }
-    except Exception as e:
-        logger.error(f"Error sending message to Google Chat: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-#run the app
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=settings.app_host, port=settings.app_port)
+    
+    uvicorn.run(
+        "apps.gateway.main:app",
+        host=settings.app_host,
+        port=settings.app_port,
+        reload=settings.app_env == "development",
+    )

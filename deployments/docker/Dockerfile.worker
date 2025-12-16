@@ -21,8 +21,6 @@ COPY infra/ ./infra/
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Expose port
-EXPOSE 8080
+# Run worker
+CMD ["python", "-m", "apps.ingestion.worker"]
 
-# Run application
-CMD ["uvicorn", "apps.gateway.main:app", "--host", "0.0.0.0", "--port", "8080"]
