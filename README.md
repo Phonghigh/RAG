@@ -69,16 +69,17 @@ rca-rag/
   - Body: `{"repo_name": "org/repo", "service_map": {...}}`
 - `GET /admin/service-map/{repo_name}` - Get service map for a repository
 
+### RAG Query
+
+- `POST /rag/query` - Query codebase using RAG
+  - Body: `{"question": "How does authentication work?", "repo": "org/repo", "top_k": 5, "files": ["app/auth/**"]}`
+  - Returns: Answer with citations and relevant code chunks
+
 ## Setup Guide
 
-### Prerequisites
+> **New to the project?** See [GETTING_STARTED.md](GETTING_STARTED.md) for a comprehensive step-by-step guide with troubleshooting tips.
 
-- Python 3.11
-- Docker & Docker Compose
-- PostgreSQL 16+ (with pgvector extension)
-- Redis/Kafka/RabbitMQ (configurable)
-
-### Installation
+### Quick Start
 
 1. **Clone repository and install dependencies:**
 
@@ -117,7 +118,18 @@ uvicorn apps.gateway.main:app --host 0.0.0.0 --port 8080
 
 # Start ingestion worker (in separate terminal)
 python -m apps.ingestion.worker
+
+# Start analysis worker (in separate terminal)
+python -m apps.analysis
+
+# Start indexer worker in message queue mode (in separate terminal, optional)
+python -m apps.indexer --mq
+
+# Or manually index a repository
+python -m apps.indexer <repo_id>
 ```
+
+For detailed setup instructions, troubleshooting, and configuration options, see [GETTING_STARTED.md](GETTING_STARTED.md).
 
 ### Docker Compose Services
 
@@ -139,6 +151,11 @@ Key configuration options in `configs/.env`:
 - `GITHUB_WEBHOOK_SECRET`: GitHub webhook secret for signature verification
 - `GOOGLE_CHAT_WEBHOOK_URL`: Google Chat webhook URL
 - `RETENTION_DAYS`: Days to retain raw diffs (default: 90)
+- `EMBEDDING_MODEL_NAME`: Embedding model for RAG (default: all-MiniLM-L6-v2)
+- `RULES_CONFIG_PATH`: Path to rules YAML configuration file
+- `CVE_DB_PATH`: Path to CVE database file (optional)
+- `INDEXING_ENABLED`: Enable automatic indexing after analysis (default: true)
+- `ANALYSIS_TIMEOUT`: Analysis timeout in seconds (default: 300)
 
 See `configs/app.example.env` for all available options.
 
@@ -201,6 +218,35 @@ Background worker processing:
 - Uploading raw patches and artifacts to S3/MinIO
 - Enriching data with metadata
 
+### Analysis Worker
+
+Background worker processing:
+- GitHub PR events from message queue
+- Fetching diffs from S3/MinIO storage
+- Running AST parsing, rule validation, secret scanning
+- Dependency risk analysis
+- Ownership inference
+- Storing findings in database
+- Triggering automatic indexing
+
+### Indexer Worker
+
+Background worker for RAG indexing:
+- Subscribes to indexing requests from analysis worker
+- Chunks code (function-level, file-level, PR-level)
+- Generates embeddings using local models
+- Stores chunks in pgvector for semantic search
+
+Run indexer worker:
+
+```bash
+# Message queue mode (automatic)
+python -m apps.indexer --mq
+
+# Manual mode (index specific repository)
+python -m apps.indexer <repo_id>
+```
+
 ### Notifier
 
 Google Chat integration:
@@ -231,6 +277,42 @@ Configure via `MQ_TYPE` environment variable.
 - **S3**: AWS S3 or S3-compatible services
 
 Configure via `STORAGE_TYPE` environment variable.
+
+## RAG Query API
+
+The RAG (Retrieval-Augmented Generation) system allows querying the codebase using natural language.
+
+### Example Query
+
+```bash
+curl -X POST http://localhost:8080/rag/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "How does user authentication work?",
+    "repo": "org/repo",
+    "top_k": 5,
+    "files": ["app/auth/**"]
+  }'
+```
+
+### Response Format
+
+```json
+{
+  "answer": "Based on the codebase: ...",
+  "citations": [
+    {
+      "path": "app/auth/AuthService.java",
+      "commit": "abc123...",
+      "lines": [10, 20],
+      "score": 0.95
+    }
+  ],
+  "chunks": [...]
+}
+```
+
+The system uses hybrid retrieval (BM25 + vector search) to find relevant code snippets and provides citations for traceability.
 
 ## Observability
 
@@ -295,17 +377,19 @@ python -m apps.ingestion.retention.worker
 - [x] Retention job
 - [x] Observability (metrics, logging)
 
-### Phase 2 (Next) - Analysis & RAG
+### Phase 2 (Current) - Analysis & RAG ✅
 
-- [ ] AST parsers (Java/Python/PHP)
-- [ ] Rule engine (architecture rules)
-- [ ] Secret scanning
-- [ ] Dependency risk analysis
-- [ ] Ownership inference
-- [ ] RAG indexing
-- [ ] RAG query API
+- [x] AST parsers (Java/Python/PHP)
+- [x] Rule engine (architecture rules)
+- [x] Secret scanning
+- [x] Dependency risk analysis
+- [x] Ownership inference
+- [x] RAG indexing
+- [x] RAG query API
+- [x] Automatic indexing after analysis
+- [x] Integration between analysis and indexing workers
 
-### Phase 3 - RCA & TTF
+### Phase 3 (Next) - RCA & TTF
 
 - [ ] RCA generator (automatic on build failure)
 - [ ] TTF (Time-to-Fix) prediction model

@@ -40,15 +40,16 @@ async def test_process_pull_request_event(db_session: AsyncSession):
     await processor.process_pull_request_event(normalized)
     
     # Verify PR was created
+    from sqlalchemy import select
     from apps.shared.db.models import PullRequest, Repo
     
     repo = await db_session.scalar(
-        Repo.__table__.select().where(Repo.name == "org/repo")
+        select(Repo).where(Repo.name == "org/repo")
     )
     assert repo is not None
     
     pr = await db_session.scalar(
-        PullRequest.__table__.select().where(
+        select(PullRequest).where(
             PullRequest.repo_id == repo.id, PullRequest.number == 42
         )
     )
@@ -70,15 +71,16 @@ async def test_process_push_event(db_session: AsyncSession):
     await processor.process_push_event(normalized)
     
     # Verify commit was created
+    from sqlalchemy import select
     from apps.shared.db.models import Commit, Repo
     
     repo = await db_session.scalar(
-        Repo.__table__.select().where(Repo.name == "org/repo")
+        select(Repo).where(Repo.name == "org/repo")
     )
     assert repo is not None
     
     commit = await db_session.scalar(
-        Commit.__table__.select().where(
+        select(Commit).where(
             Commit.repo_id == repo.id, Commit.sha == "def456"
         )
     )

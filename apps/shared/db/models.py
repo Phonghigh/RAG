@@ -10,11 +10,94 @@ from sqlalchemy import (
     Integer,
     Numeric,
     Text,
+    TypeDecorator,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import VECTOR
 from apps.shared.db.base import Base
+
+
+class DialectJSONB(TypeDecorator):
+    """JSONB type that adapts to JSON for SQLite compatibility in tests.
+    
+    Uses JSONB for PostgreSQL (production) and JSON for SQLite (testing).
+    """
+    impl = postgresql.JSONB
+    cache_ok = True
+    
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(postgresql.JSONB())
+        elif dialect.name == 'sqlite':
+            return dialect.type_descriptor(sqlite.JSON())
+        else:
+            # Default to JSONB for other databases
+            return dialect.type_descriptor(postgresql.JSONB())
+
+
+class DialectBigInteger(TypeDecorator):
+    """BigInteger type that adapts for SQLite compatibility in tests.
+    
+    Uses BigInteger for PostgreSQL (production) and Integer for SQLite (testing).
+    SQLite doesn't support autoincrement with BigInteger, so we use Integer for tests.
+    """
+    impl = BigInteger
+    cache_ok = True
+    
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(BigInteger())
+        elif dialect.name == 'sqlite':
+            # SQLite autoincrement only works with INTEGER, not BIGINT
+            return dialect.type_descriptor(Integer())
+        else:
+            # Default to BigInteger for other databases
+            return dialect.type_descriptor(BigInteger())
+
+
+class DialectVector(TypeDecorator):
+    """Vector type that adapts for SQLite compatibility in tests.
+    
+    Uses VECTOR for PostgreSQL (production) and Text for SQLite (testing).
+    SQLite doesn't support vector types, so we store as JSON string in tests.
+    """
+    impl = VECTOR
+    cache_ok = True
+    
+    def __init__(self, dimensions: int = 1536):
+        self.dimensions = dimensions
+        super().__init__()
+    
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(VECTOR(self.dimensions))
+        elif dialect.name == 'sqlite':
+            # SQLite doesn't support vector types, use Text as fallback for tests
+            return dialect.type_descriptor(Text())
+        else:
+            # Default to VECTOR for other databases
+            return dialect.type_descriptor(VECTOR(self.dimensions))
+    
+    def process_bind_param(self, value, dialect):
+        """Convert list to JSON string for SQLite."""
+        if value is None:
+            return None
+        if dialect.name == 'sqlite':
+            import json
+            return json.dumps(value)
+        return value
+    
+    def process_result_value(self, value, dialect):
+        """Convert JSON string back to list for SQLite."""
+        if value is None:
+            return None
+        if dialect.name == 'sqlite':
+            import json
+            if isinstance(value, str):
+                return json.loads(value)
+        return value
 
 
 class Repo(Base):
@@ -22,10 +105,10 @@ class Repo(Base):
     
     __tablename__ = "repos"
     
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(DialectBigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     monorepo: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
-    service_map: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    service_map: Mapped[dict] = mapped_column(DialectJSONB, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -55,9 +138,9 @@ class Commit(Base):
     
     __tablename__ = "commits"
     
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(DialectBigInteger, primary_key=True, autoincrement=True)
     repo_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=True
+        DialectBigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=True
     )
     sha: Mapped[str] = mapped_column(CHAR(40), nullable=False)
     author: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -83,9 +166,9 @@ class PullRequest(Base):
     
     __tablename__ = "pull_requests"
     
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(DialectBigInteger, primary_key=True, autoincrement=True)
     repo_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=True
+        DialectBigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=True
     )
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -126,15 +209,15 @@ class Diff(Base):
     
     __tablename__ = "diffs"
     
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(DialectBigInteger, primary_key=True, autoincrement=True)
     repo_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=True
+        DialectBigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=True
     )
     pr_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, ForeignKey("pull_requests.id", ondelete="CASCADE"), nullable=True
     )
     commit_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger, ForeignKey("commits.id", ondelete="CASCADE"), nullable=True
+        DialectBigInteger, ForeignKey("commits.id", ondelete="CASCADE"), nullable=True
     )
     path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     lang: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -158,9 +241,9 @@ class Finding(Base):
     
     __tablename__ = "findings"
     
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(DialectBigInteger, primary_key=True, autoincrement=True)
     repo_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=True
+        DialectBigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=True
     )
     pr_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, ForeignKey("pull_requests.id", ondelete="CASCADE"), nullable=True
@@ -169,8 +252,8 @@ class Finding(Base):
     rule_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     severity: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    details: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    suggestion: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict]] = mapped_column(DialectJSONB, nullable=True)
+    suggestion: Mapped[Optional[dict]] = mapped_column(DialectJSONB, nullable=True)
     owner_hint: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     confidence: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -188,12 +271,12 @@ class TestArtifact(Base):
     
     __tablename__ = "test_artifacts"
     
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(DialectBigInteger, primary_key=True, autoincrement=True)
     pr_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, ForeignKey("pull_requests.id", ondelete="CASCADE"), nullable=True
     )
     commit_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger, ForeignKey("commits.id", ondelete="CASCADE"), nullable=True
+        DialectBigInteger, ForeignKey("commits.id", ondelete="CASCADE"), nullable=True
     )
     framework: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     passed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -217,12 +300,12 @@ class Notification(Base):
     
     __tablename__ = "notifications"
     
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(DialectBigInteger, primary_key=True, autoincrement=True)
     pr_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, ForeignKey("pull_requests.id", ondelete="CASCADE"), nullable=True
     )
     channel: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    payload: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    payload: Mapped[Optional[dict]] = mapped_column(DialectJSONB, nullable=True)
     delivered: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -238,12 +321,12 @@ class Audit(Base):
     
     __tablename__ = "audits"
     
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(DialectBigInteger, primary_key=True, autoincrement=True)
     actor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     action: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     entity: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    entity_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    entity_id: Mapped[Optional[int]] = mapped_column(DialectBigInteger, nullable=True)
+    metadata_: Mapped[Optional[dict]] = mapped_column("metadata", DialectJSONB, nullable=True)
     at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -255,9 +338,9 @@ class RagChunk(Base):
     
     __tablename__ = "rag_chunks"
     
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(DialectBigInteger, primary_key=True, autoincrement=True)
     repo_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=True
+        DialectBigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=True
     )
     source_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -266,12 +349,8 @@ class RagChunk(Base):
     commit_sha: Mapped[Optional[str]] = mapped_column(CHAR(40), nullable=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ast_signature: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    embedding: Mapped[Optional[list[float]]] = mapped_column(
-        # Note: pgvector type will be handled at DB level
-        type_=None,  # Will be set to vector(1536) in migration
-        nullable=True,
-    )
+    metadata_: Mapped[Optional[dict]] = mapped_column("metadata", DialectJSONB, nullable=True)
+    embedding: Mapped[Optional[list[float]]] = mapped_column(DialectVector(1536), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

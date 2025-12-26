@@ -103,6 +103,29 @@ class Settings(BaseSettings):
         description="Allow external HTTP requests (for air-gapped environments)"
     )
 
+    # Analysis & RAG
+    embedding_model_name: str = Field(
+        default="all-MiniLM-L6-v2",
+        description="Embedding model name for RAG (sentence-transformers compatible)"
+    )
+    rag_top_k: int = Field(default=5, description="Default number of chunks to retrieve for RAG queries")
+    rules_config_path: Optional[str] = Field(
+        default="configs/rules.yaml",
+        description="Path to rules YAML configuration file"
+    )
+    cve_db_path: Optional[str] = Field(
+        default=None,
+        description="Path to CVE database file (JSON or CSV)"
+    )
+    indexing_enabled: bool = Field(
+        default=True,
+        description="Enable automatic indexing after analysis completes"
+    )
+    analysis_timeout: int = Field(
+        default=300,
+        description="Analysis timeout in seconds for long-running analysis"
+    )
+
 
 # Global settings instance
 settings = Settings()

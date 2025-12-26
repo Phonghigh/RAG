@@ -1,0 +1,64 @@
+# Example rules configuration for architecture validation
+# Copy this file to configs/rules.yaml and customize for your project
+
+rules:
+  # Forbid domain layer from depending on infrastructure
+  - id: domain_no_dep_infra
+    type: forbid_imports
+    severity: error
+    from:
+      - "**/domain/**"
+      - "**/app/domain/**"
+    to:
+      - "**/infra/**"
+      - "**/infrastructure/**"
+      - "**/adapters/**"
+      - "**/external/**"
+
+  # Forbid use cases from calling web/UI layers
+  - id: usecase_no_call_web
+    type: forbid_imports
+    severity: error
+    from:
+      - "**/usecases/**"
+      - "**/app/usecases/**"
+    to:
+      - "**/api/**"
+      - "**/http/**"
+      - "**/ui/**"
+      - "**/web/**"
+
+  # Prevent billing module from importing marketing
+  - id: billing_not_import_marketing
+    type: forbid_imports
+    severity: warning
+    from:
+      - "**/billing/**"
+    to:
+      - "**/marketing/**"
+
+  # Database gateway should only be called by repositories
+  - id: db_gateway_only
+    type: allow_only
+    severity: error
+    target:
+      - "**/infra/db/**"
+      - "**/infrastructure/database/**"
+    callers:
+      - "**/repositories/**"
+      - "**/infra/repositories/**"
+      - "**/migrations/**"
+
+  # Detect dependency cycles
+  - id: no_cycles
+    type: graph_check
+    severity: error
+    check: no_cycles
+
+  # Enforce public API contracts for domain and use cases
+  - id: public_api_fixed
+    type: enforce_public
+    severity: warning
+    packages:
+      - "**/domain/**"
+      - "**/usecases/**"

@@ -8,6 +8,7 @@ from apps.gateway.webhook.github import router as github_webhook_router
 from apps.gateway.api.health import router as health_router
 from apps.gateway.api.metrics import router as metrics_router
 from apps.gateway.api.admin import router as admin_router
+from apps.gateway.api.rag import router as rag_router
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, settings.log_level.upper()))
@@ -35,6 +36,7 @@ app.include_router(health_router)
 app.include_router(metrics_router)
 app.include_router(github_webhook_router)
 app.include_router(admin_router)
+app.include_router(rag_router)
 
 
 @app.get("/")

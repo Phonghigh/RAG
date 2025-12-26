@@ -51,7 +51,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ../infra/sql:/docker-entrypoint-initdb.d
     ports:
-      - "5432:5432"
+      - "5434:5432"
     networks:
       - rca-rag-network
     healthcheck:

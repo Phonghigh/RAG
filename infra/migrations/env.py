@@ -4,9 +4,26 @@ from sqlalchemy import pool
 from alembic import context
 import os
 import sys
+from dotenv import load_dotenv
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+# Load environment variables from .env file
+# Look for app.env or .env in configs/ directory (relative to project root)
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+# Try app.env first (common naming convention)
+env_paths = [
+    os.path.join(project_root, "configs", "app.env"),
+    os.path.join(project_root, "configs", ".env"),
+    os.path.join(project_root, ".env"),
+]
+loaded_env = None
+for env_path in env_paths:
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+        loaded_env = env_path
+        break
 
 from apps.shared.db.base import Base
 from apps.shared.db.models import *  # noqa: F401, F403
@@ -19,7 +36,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Set sqlalchemy.url from environment
-database_url = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/rca_rag")
+database_url = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5434/rca_rag")
 config.set_main_option("sqlalchemy.url", database_url)
 
 target_metadata = Base.metadata
